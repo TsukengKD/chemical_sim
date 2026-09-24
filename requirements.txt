@@ -1,0 +1,5 @@
+numpy>=1.23
+numba>=0.58
+# pygame-ce — поддерживаемая версия pygame (тот же `import pygame`), для неё есть
+# готовые сборки под новые версии Python (в т.ч. 3.14 для Windows)
+pygame-ce>=2.4
