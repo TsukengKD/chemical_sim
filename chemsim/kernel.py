@@ -3,7 +3,7 @@
 Физическая модель (подробно — в README):
 
     E = Σ_пар [ R1(r) − (bσ + τ)·A1(r) − h1(bπ)·P(r) − h2(bπ)·Q(r)
-                + (1−zL)(1−α∨)·E_отт(r) + E_дисп(r) + (1−z)·k_e·q_i·q_j/r ]
+                + (1−zL)(1−α∨)·E_отт(r) + E_дисп(r) + (1−z)·k_e·q_i·q_j·u_DSF(r) ]
         + Σ_углов K·bσ_ij·bσ_ik·(cos θ − cos θ0)²
         − Σ_пар 1-3  X_jk·(отталкивание + кулон)_jk
 
@@ -12,9 +12,11 @@
   σ-связи bσ.
 * bσ_ij = z(r)·min(f_ij, f_ji),  f_ij = (Z_ij/V_i)^(−δ) при Z_ij > V_i — валентность:
   если у атома больше партнёров, чем валентность V, связи ослабевают и удлиняются
-  (закон Полинга/Абелла).  Z_ij = Σ_k z_ik·g(θ_jik) — число соседей атома i,
+  (закон Полинга/Абелла).  Z_ij = Σ_k z_ik·w·g(θ_jik) — число соседей атома i,
   «видимое» из связи i–j; соседи под острым углом (θ < 90°) конкурируют сильнее
-  (g = 1 + c·cos²θ, как угловая функция потенциала Терсоффа).
+  (g = 1 + c·cos²θ, как угловая функция потенциала Терсоффа), а более слабая связь
+  не отнимает валентность у более прочной (w = min(1, D_ik/D_ij)).  Для ионных
+  связей показатель δ уменьшается с ионностью (ионная связь ненаправленная).
 * Свободная валентность s_i = V_i − Σ bσ распределяется между соседями, у которых
   тоже есть свободная валентность; так возникают π-связи (двойные и тройные),
   ароматические полуторные связи и радикальные центры.
@@ -48,7 +50,7 @@ import numpy as np
 from .jit import njit
 from .params import (P_BOND, P_D1, P_R1, P_A1, P_RON, P_ROFF, P_PIMAX, P_CP, P_AP, P_R2,
                      P_CQ, P_AQ, P_R3, P_EPS, P_X6, P_GR6, P_GD6, P_RONL, P_ROFFL, P_QT,
-                     E_VAL, E_EVAL, E_DELTA, E_KANG, E_GACUTE,
+                     P_DI, E_VAL, E_EVAL, E_DELTA, E_KANG, E_GACUTE, E_METAL,
                      S_RSW, S_RCUT, S_CREP, S_CDISP, S_KMIN, S_KOVER, S_KSPARE, S_KPI,
                      S_KLP, S_EPSW, S_KE, S_AS3)
 
@@ -118,6 +120,21 @@ def _taper(r, ron, roff):
     return 1.0 - s, -ds
 
 
+DSF_ALPHA = 0.2   # параметр затухания DSF, 1/Å
+
+
+@njit(inline="always")
+def _dsf_h(r, as3):
+    """h(r) = erfc(αr)/r_s,  r_s = (r³ + a³)^(1/3) — экранирование на малых r."""
+    rs3 = r * r * r + as3
+    rs = rs3 ** (1.0 / 3.0)
+    er = math.erfc(DSF_ALPHA * r)
+    h = er / rs
+    dh = -1.1283791670955126 * DSF_ALPHA * math.exp(-DSF_ALPHA * DSF_ALPHA * r * r) / rs \
+        - er * (r * r / rs3) / rs
+    return h, dh
+
+
 @njit(inline="always")
 def _satur(zb, V, dl, kover):
     """f = (1 + ramp(Z/V − 1))^(−δ) и df/dZ."""
@@ -182,6 +199,7 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
     epsw = scal[S_EPSW]
     ke = scal[S_KE]
     as3 = scal[S_AS3]
+    hc, dhc = _dsf_h(rcut, as3)
 
     for a in range(N):
         forces[a, 0] = 0.0
@@ -266,7 +284,6 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
     gs14 = np.zeros(P)
     # ---- по атомам
     Z = np.zeros(N)
-    gZ = np.zeros(N)
     Bs = np.zeros(N)
     sp = np.zeros(N)
     dsp = np.zeros(N)
@@ -301,14 +318,15 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
         dvec[p, 1] = dy
         dvec[p, 2] = dz
         rr[p] = r
-        pp = pairpar[typ[i], typ[j]]
-        if pp[P_BOND] > 0.0:
-            z, dzr = _taper(r, pp[P_RON], pp[P_ROFF])
+        ti = typ[i]
+        tj = typ[j]
+        if pairpar[ti, tj, P_BOND] > 0.0:
+            z, dzr = _taper(r, pairpar[ti, tj, P_RON], pairpar[ti, tj, P_ROFF])
             zz[p] = z
             dzz[p] = dzr
             Z[i] += z
             Z[j] += z
-            zl[p], dzl[p] = _taper(r, pp[P_RONL], pp[P_ROFFL])
+            zl[p], dzl[p] = _taper(r, pairpar[ti, tj, P_RONL], pairpar[ti, tj, P_ROFFL])
 
     # 2. списки соседей в окне связывания и координация, видимая из связи
     bdeg = np.zeros(N + 1, dtype=np.int64)
@@ -326,31 +344,40 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
             bfill[pi[p]] += 1
             badj[bfill[pj[p]]] = p
             bfill[pj[p]] += 1
+    # Z_ij = z_ij + Σ_k z_ik·w_jk·g(θ_jik):
+    #   w_jk = min(1, D_ik/D_ij) — более слабая связь не может «отнять» валентность у
+    #   более прочной (электроны идут туда, где энергия ниже; ср. метод BEBO);
+    #   g = 1 + c·cos²θ при θ < 90° — соседи под острым углом конкурируют сильнее.
     for p in range(P):
         if zz[p] > 0.0:
-            zbi[p] = Z[pi[p]]
-            zbj[p] = Z[pj[p]]
+            zbi[p] = zz[p]
+            zbj[p] = zz[p]
     for a in range(N):
-        cg = elempar[typ[a], E_GACUTE]
-        if cg <= 0.0:
-            continue
+        ta = typ[a]
+        cg = elempar[ta, E_GACUTE]
         for u_ in range(bdeg[a], bdeg[a + 1]):
             p1 = badj[u_]
             ux, uy, uz, o1 = _side_vec(p1, a, pi, pj, dvec)
+            d1 = pairpar[ta, typ[o1], P_D1]
             for v_ in range(u_ + 1, bdeg[a + 1]):
                 p2 = badj[v_]
                 vx, vy, vz, o2 = _side_vec(p2, a, pi, pj, dvec)
-                cs = (ux * vx + uy * vy + uz * vz) / (rr[p1] * rr[p2])
-                if cs > 0.0:
-                    g1 = cg * cs * cs          # g − 1
-                    if pi[p1] == a:
-                        zbi[p1] += zz[p2] * g1
-                    else:
-                        zbj[p1] += zz[p2] * g1
-                    if pi[p2] == a:
-                        zbi[p2] += zz[p1] * g1
-                    else:
-                        zbj[p2] += zz[p1] * g1
+                d2 = pairpar[ta, typ[o2], P_D1]
+                w12 = d2 / d1 if d2 < d1 else 1.0
+                w21 = d1 / d2 if d1 < d2 else 1.0
+                g = 1.0
+                if cg > 0.0:
+                    cs = (ux * vx + uy * vy + uz * vz) / (rr[p1] * rr[p2])
+                    if cs > 0.0:
+                        g = 1.0 + cg * cs * cs
+                if pi[p1] == a:
+                    zbi[p1] += zz[p2] * w12 * g
+                else:
+                    zbj[p1] += zz[p2] * w12 * g
+                if pi[p2] == a:
+                    zbi[p2] += zz[p1] * w21 * g
+                else:
+                    zbj[p2] += zz[p1] * w21 * g
 
     # 3. порядок σ-связи
     for p in range(P):
@@ -360,8 +387,8 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
             j = pj[p]
             Vi = elempar[typ[i], E_VAL]
             Vj = elempar[typ[j], E_VAL]
-            fi_[p], dfi[p] = _satur(zbi[p], Vi, elempar[typ[i], E_DELTA], kover)
-            fj_[p], dfj[p] = _satur(zbj[p], Vj, elempar[typ[j], E_DELTA], kover)
+            fi_[p], dfi[p] = _satur(zbi[p], Vi, pairpar[typ[i], typ[j], P_DI], kover)
+            fj_[p], dfj[p] = _satur(zbj[p], Vj, pairpar[typ[j], typ[i], P_DI], kover)
             v, a_, b_ = _smin(fi_[p], fj_[p], kmin)
             fs[p] = v
             dfsa[p] = a_
@@ -533,20 +560,21 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
         j = pj[p]
         ti = typ[i]
         tj = typ[j]
-        pp = pairpar[ti, tj]
         r = rr[p]
+        if r >= rcut:
+            continue
         T, dT = _taper(r, rsw, rcut)
         # ван-дер-ваальсовы члены
-        eps = pp[P_EPS]
-        x6 = pp[P_X6]
+        eps = pairpar[ti, tj, P_EPS]
+        x6 = pairpar[ti, tj, P_X6]
         r2 = r * r
         r5 = r2 * r2 * r
         r6 = r5 * r
-        rs6 = r6 + pp[P_GR6]
+        rs6 = r6 + pairpar[ti, tj, P_GR6]
         qq = x6 / rs6
         rep0 = c_rep * eps * qq * qq
         drep0 = -12.0 * c_rep * eps * x6 * x6 * r5 / (rs6 * rs6 * rs6)
-        den = r6 + pp[P_GD6]
+        den = r6 + pairpar[ti, tj, P_GD6]
         dsp0 = -c_disp * eps * x6 / den
         ddsp0 = 6.0 * c_disp * eps * x6 * r5 / (den * den)
         rep = rep0 * T
@@ -556,24 +584,26 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
         ebreak[EB_DISP] += edsp
         g = ddsp
         e = edsp
-        # кулоновский член (без множителя исключения 1-2)
+        # кулоновский член (без множителя исключения 1-2): затухающая сила со
+        # сдвигом (DSF, Fennell & Gezelter 2006) — энергия и сила плавно обращаются
+        # в ноль на r_cut, а нейтральные молекулы не «видят» ложных зарядов на границе
         ecl = 0.0
         decl = 0.0
         gqi = 0.0
         gqj = 0.0
         if ke > 0.0 and q[i] != 0.0 and q[j] != 0.0:
-            rs3 = r2 * r + as3
-            rsh = rs3 ** (1.0 / 3.0)
-            c_ = ke * q[i] * q[j] / rsh
-            ecl = c_ * T
-            decl = -c_ * (r2 / rs3) * T + c_ * dT       # d/dr (drs/dr = r²/rs²)
-            gqi = ke * q[j] / rsh * T
-            gqj = ke * q[i] / rsh * T
-        if pp[P_BOND] > 0.0:
+            u_, du_ = _dsf_h(r, as3)
+            u_ = u_ - hc - dhc * (r - rcut)
+            du_ = du_ - dhc
+            ecl = ke * q[i] * q[j] * u_
+            decl = ke * q[i] * q[j] * du_
+            gqi = ke * q[j] * u_
+            gqj = ke * q[i] * u_
+        if pairpar[ti, tj, P_BOND] > 0.0:
             z = zz[p]
-            D1 = pp[P_D1]
-            a1 = pp[P_A1]
-            ex = math.exp(-a1 * (r - pp[P_R1]))
+            D1 = pairpar[ti, tj, P_D1]
+            a1 = pairpar[ti, tj, P_A1]
+            ex = math.exp(-a1 * (r - pairpar[ti, tj, P_R1]))
             R1 = D1 * ex * ex * T
             dR1 = -2.0 * a1 * D1 * ex * ex * T + D1 * ex * ex * dT
             A1 = 2.0 * D1 * ex
@@ -582,6 +612,13 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
             b = bs[p] + bp[p]
             ci, dci = _clamp01(elempar[ti, E_VAL] - Bt[i] + b, kmin)
             cj, dcj = _clamp01(elempar[tj, E_VAL] - Bt[j] + b, kmin)
+            # у металла есть электроны проводимости — замкнутой оболочки нет
+            if elempar[ti, E_METAL] > 0.0:
+                ci = 1.0
+                dci = 0.0
+            if elempar[tj, E_METAL] > 0.0:
+                cj = 1.0
+                dcj = 0.0
             cci[p] = ci
             ccj[p] = cj
             dcci[p] = dci
@@ -622,16 +659,16 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
                                            vx, vy, vz, rr[qp], cs, gcs)
             # π
             if bp[p] > 0.0:
-                Pv = pp[P_CP] * math.exp(-pp[P_AP] * (r - pp[P_R2]))
-                dPv = -pp[P_AP] * Pv
+                Pv = pairpar[ti, tj, P_CP] * math.exp(-pairpar[ti, tj, P_AP] * (r - pairpar[ti, tj, P_R2]))
+                dPv = -pairpar[ti, tj, P_AP] * Pv
                 h2, dh2 = _ramp(bp[p] - 1.0, kpi)
                 h1 = bp[p] - h2
                 epi = -h1 * Pv
                 g += -h1 * dPv
                 gbp[p] += -Pv * (1.0 - dh2)
-                if pp[P_PIMAX] > 1.0 and h2 > 0.0:
-                    Qv = pp[P_CQ] * math.exp(-pp[P_AQ] * (r - pp[P_R3]))
-                    dQv = -pp[P_AQ] * Qv
+                if pairpar[ti, tj, P_PIMAX] > 1.0 and h2 > 0.0:
+                    Qv = pairpar[ti, tj, P_CQ] * math.exp(-pairpar[ti, tj, P_AQ] * (r - pairpar[ti, tj, P_R3]))
+                    dQv = -pairpar[ti, tj, P_AQ] * Qv
                     epi += -h2 * Qv
                     g += -h2 * dQv
                     gbp[p] += -Qv * dh2
@@ -978,39 +1015,44 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
             gfs = gb * z
             gzbi[p] = gfs * dfsa[p] * dfi[p]
             gzbj[p] = gfs * dfsb[p] * dfj[p]
-            gZ[i] += gzbi[p]
-            gZ[j] += gzbj[p]
-    # 14. Z_ij = Z_i + Σ_острых z_ik (g − 1)
+            gz[p] += gzbi[p] + gzbj[p]          # собственный вклад z_ij в Z_ij
+    # 14. Z_ij = z_ij + Σ_k z_ik·w·g(θ)
     for a in range(N):
-        cg = elempar[typ[a], E_GACUTE]
-        if cg <= 0.0:
-            continue
+        ta = typ[a]
+        cg = elempar[ta, E_GACUTE]
         for u_ in range(bdeg[a], bdeg[a + 1]):
             p1 = badj[u_]
             ux, uy, uz, o1 = _side_vec(p1, a, pi, pj, dvec)
+            d1 = pairpar[ta, typ[o1], P_D1]
             g1s = gzbi[p1] if pi[p1] == a else gzbj[p1]
             for v_ in range(u_ + 1, bdeg[a + 1]):
                 p2 = badj[v_]
+                g2s = gzbi[p2] if pi[p2] == a else gzbj[p2]
+                if g1s == 0.0 and g2s == 0.0:
+                    continue
                 vx, vy, vz, o2 = _side_vec(p2, a, pi, pj, dvec)
-                ru = rr[p1]
-                rv = rr[p2]
-                cs = (ux * vx + uy * vy + uz * vz) / (ru * rv)
-                if cs > 0.0:
-                    g2s = gzbi[p2] if pi[p2] == a else gzbj[p2]
-                    g1 = cg * cs * cs
-                    dg = 2.0 * cg * cs
-                    gz[p2] += g1s * g1
-                    gz[p1] += g2s * g1
-                    gcs = (g1s * zz[p2] + g2s * zz[p1]) * dg
+                d2 = pairpar[ta, typ[o2], P_D1]
+                w12 = d2 / d1 if d2 < d1 else 1.0
+                w21 = d1 / d2 if d1 < d2 else 1.0
+                g = 1.0
+                cs = 0.0
+                if cg > 0.0:
+                    cs = (ux * vx + uy * vy + uz * vz) / (rr[p1] * rr[p2])
+                    if cs > 0.0:
+                        g = 1.0 + cg * cs * cs
+                gz[p2] += g1s * w12 * g
+                gz[p1] += g2s * w21 * g
+                if cg > 0.0 and cs > 0.0:
+                    gcs = (g1s * zz[p2] * w12 + g2s * zz[p1] * w21) * 2.0 * cg * cs
                     if gcs != 0.0:
-                        _add_cos_force(forces, a, o1, o2, ux, uy, uz, ru, vx, vy, vz,
-                                       rv, cs, gcs)
+                        _add_cos_force(forces, a, o1, o2, ux, uy, uz, rr[p1], vx, vy, vz,
+                                       rr[p2], cs, gcs)
     # 15. Z_i -> z -> r;  силы
     for p in range(P):
         i = pi[p]
         j = pj[p]
         if dzz[p] != 0.0:
-            gr[p] += (gz[p] + gZ[i] + gZ[j]) * dzz[p]
+            gr[p] += gz[p] * dzz[p]
         s = gr[p] / rr[p]
         fx = s * dvec[p, 0]
         fy = s * dvec[p, 1]

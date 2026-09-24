@@ -74,7 +74,7 @@ def template(formula: str, relax: bool = True):
         return [formula], np.zeros((1, 3))
     if formula not in _RAW:
         raise KeyError(f"Нет шаблона для {formula!r}")
-    if formula in _CACHE:
+    if relax and formula in _CACHE:
         s, x = _CACHE[formula]
         return list(s), x.copy()
     _, syms, pos = _RAW[formula]
@@ -85,7 +85,8 @@ def template(formula: str, relax: bool = True):
         x, _, _ = fire_minimize(ev, x, fmax=5e-3, max_steps=5000)
     m = np.array([ELEMENTS[s].mass for s in syms])
     x = x - (m[:, None] * x).sum(axis=0) / m.sum()
-    _CACHE[formula] = (list(syms), x.copy())
+    if relax:
+        _CACHE[formula] = (list(syms), x.copy())
     return list(syms), x
 
 

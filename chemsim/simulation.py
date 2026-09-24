@@ -50,7 +50,7 @@ class Simulation:
         self.dx_max = 0.025     # максимальное смещение атома за шаг, Å
         self.e_tol = 2.0        # допустимое изменение полной энергии за шаг, кДж/моль
         self.retries = 0        # сколько шагов пришлось повторить с меньшим dt
-        self.skin = 1.0
+        self.skin = 0.8
         self.rlist = self.params.settings.r_cut + self.skin
         self.kw = 200.0      # жёсткость стенки, кДж/моль/Å³
         self.dw = 1.0        # толщина «мягкого» слоя стенки, Å

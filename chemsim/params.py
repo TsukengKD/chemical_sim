@@ -58,7 +58,8 @@ P_GD6 = 16     # (γ_d x)^6 — демпфирование дисперсии
 P_RONL = 17    # окно дальнего притяжения радикалов (хвост Морзе)
 P_ROFFL = 18
 P_QT = 19      # заряд, переходящий на атом первого типа по связи (ионность Полинга)
-NPP = 20
+P_DI = 20      # показатель насыщения δ для атома первого типа в этой связи
+NPP = 21
 
 # параметры элемента (elempar[a, k])
 E_VAL = 0      # валентность
@@ -68,7 +69,8 @@ E_KANG = 3     # константа угловой жёсткости (VSEPR)
 E_MASS = 4
 E_GACUTE = 5   # усиление конкуренции соседей под острыми углами (Терсофф)
 E_CHI = 6      # электроотрицательность
-NEP = 7
+E_METAL = 7    # 1 для металлов (есть электроны проводимости)
+NEP = 8
 
 
 @dataclass
@@ -82,6 +84,10 @@ class ModelSettings:
     # энергии связи димера.
     delta_nonmetal: float = 0.55
     delta_metal: float = 0.30
+    # ионная связь ненаправленная и ненасыщаемая, как металлическая: для связи с
+    # ионным характером I показатель δ = δ_ков·(1 − I) + δ_ион·I.  δ_ион = 0.3
+    # даёт энергию когезии кристалла NaCl ≈ 650 кДж/моль (эксп. 642).
+    delta_ionic: float = 0.30
     # угловая жёсткость VSEPR, кДж/моль (даёт частоту деформационного колебания
     # H2O ≈ 1600 см⁻¹)
     k_angle: float = 200.0
@@ -109,8 +115,8 @@ class ModelSettings:
     tail_on: float = 1.5
     tail_off: float = 3.5
     # глобальный радиус обрезания
-    r_sw: float = 5.5
-    r_cut: float = 6.5
+    r_sw: float = 4.5
+    r_cut: float = 5.5
     # форма ван-дер-ваальсова потенциала
     gamma_r: float = 0.5
     gamma_d: float = 0.8
@@ -306,6 +312,7 @@ class ForceFieldParams:
             self.elempar[i, E_MASS] = el.mass
             self.elempar[i, E_GACUTE] = 0.0 if el.metal else s.g_acute
             self.elempar[i, E_CHI] = el.chi
+            self.elempar[i, E_METAL] = 1.0 if el.metal else 0.0
         # коэффициенты формы ван-дер-ваальсова потенциала: минимум в x, глубина ε
         self.c_rep, self.c_disp = _vdw_shape_coefficients(s.gamma_r, s.gamma_d)
         for i, ea in enumerate(ELEMENT_LIST):
@@ -351,6 +358,15 @@ class ForceFieldParams:
                         pp[P_CQ] = info.cq
                         pp[P_AQ] = info.aq
                         pp[P_R3] = info.orders[3][1]
+        # δ каждой стороны связи с учётом ионности (несимметричен)
+        for i, ea in enumerate(ELEMENT_LIST):
+            for j, eb in enumerate(ELEMENT_LIST):
+                d_i = self.elempar[i, E_DELTA]
+                if ea.valence > 0 and eb.valence > 0 and ea.chi > 0 and eb.chi > 0:
+                    ion = 1.0 - math.exp(-0.25 * (ea.chi - eb.chi) ** 2)
+                else:
+                    ion = 0.0
+                self.pairpar[i, j, P_DI] = d_i * (1.0 - ion) + s.delta_ionic * ion
         self.masses = self.elempar[:, E_MASS].copy()
         # скаляры для ядра
         self.scalars = np.array([

@@ -26,8 +26,28 @@ def _source_hash():
     return h.hexdigest()[:12]
 
 
+def _cache_dir():
+    """Каталог кэша: рядом с пакетом, а если туда нельзя писать — в кэше пользователя."""
+    name = "numba-" + _source_hash()
+    candidates = [os.path.join(_HERE, "__pycache__", name)]
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or \
+        os.path.join(os.path.expanduser("~"), ".cache")
+    candidates.append(os.path.join(base, "chemsim", name))
+    for path in candidates:
+        try:
+            os.makedirs(path, exist_ok=True)
+            probe = os.path.join(path, ".write-test")
+            with open(probe, "w") as fh:
+                fh.write("ok")
+            os.remove(probe)
+            return path
+        except OSError:
+            continue
+    return candidates[0]
+
+
 if "NUMBA_CACHE_DIR" not in os.environ:
-    os.environ["NUMBA_CACHE_DIR"] = os.path.join(_HERE, "__pycache__", "numba-" + _source_hash())
+    os.environ["NUMBA_CACHE_DIR"] = _cache_dir()
 
 try:  # pragma: no cover - зависит от окружения
     from numba import njit as _njit
@@ -36,6 +56,8 @@ try:  # pragma: no cover - зависит от окружения
 
     def njit(func=None, **kwargs):
         kwargs.setdefault("cache", True)
+        kwargs.setdefault("error_model", "numpy")
+        kwargs.setdefault("fastmath", True)
         if func is not None:
             return _njit(**kwargs)(func)
         return _njit(**kwargs)
