@@ -182,7 +182,7 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
 
     pos (N,3), typ (N,) — индексы элементов; pi, pj — пары соседей (i<j),
     npair — число пар.  Результаты: forces (N,3) (перезаписывается),
-    bond_order (npair,) = bσ+bπ, ebreak (N_EBREAK,), atomout (N, N_ATOMOUT).
+    bond_order (npair,) = bσ+bπ+τ, ebreak (N_EBREAK,), atomout (N, N_ATOMOUT).
     Возвращает полную потенциальную энергию.
     """
     N = pos.shape[0]
@@ -1063,11 +1063,18 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
         forces[j, 0] -= fx
         forces[j, 1] -= fy
         forces[j, 2] -= fzz
-        bond_order[p] = bs[p] + bp[p]
+        # эффективный порядок связи для анализа: σ + π + «хвост» (растянутая
+        # колебательно-возбуждённая связь ещё не считается разорванной)
+        bond_order[p] = bs[p] + bp[p] + tau[p] * tphi[p]
 
+    tsum = np.zeros(N)
+    for p in range(P):
+        if tau[p] > 0.0:
+            tsum[pi[p]] += tau[p] * tphi[p]
+            tsum[pj[p]] += tau[p] * tphi[p]
     for a in range(N):
         atomout[a, A_Z] = Z[a]
-        fv = elempar[typ[a], E_VAL] - Bt[a]
+        fv = elempar[typ[a], E_VAL] - Bt[a] - tsum[a]
         atomout[a, A_SPARE] = fv if fv > 0.0 else 0.0
         atomout[a, A_BTOT] = Bt[a]
         atomout[a, A_SN] = 1.0 - 1.0 / c0[a] if c0[a] != 0.0 else 0.0

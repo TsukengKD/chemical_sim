@@ -63,7 +63,7 @@ HELP_TEXT = """КАК ЭТО РАБОТАЕТ
 
 
 class App:
-    def __init__(self, width=1500, height=900):
+    def __init__(self, width=1500, height=900, warmup_thread=True):
         pygame.init()
         pygame.display.set_caption("Химический симулятор — законы физики вместо рецептов")
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
@@ -96,7 +96,8 @@ class App:
         self.scenario_rects = []
         self.current_scenario = None
         self.layout()
-        threading.Thread(target=self._warmup, daemon=True).start()
+        if warmup_thread:
+            threading.Thread(target=self._warmup, daemon=True).start()
 
     # ------------------------------------------------------------ подготовка
     def _warmup(self):
@@ -107,7 +108,8 @@ class App:
             s.step(3)
             for name in template_names():
                 molecules.template(name)
-            self.state = "ready"
+            if self.state == "loading":
+                self.state = "ready"
         except Exception as exc:  # pragma: no cover
             self.loading_error = repr(exc)
 
@@ -331,10 +333,11 @@ class App:
             return
         from ..md import kinetic_energy
         e0 = kinetic_energy(sim.vel[sel], sim.invm[sel])
-        v = sim.vel[sel]
-        v *= math.sqrt(factor) ** 0.5
-        # не остужать ниже 5 К и не греть выше 20000 К (защита)
-        sim.vel[sel] = v
+        t_local = 2.0 * e0 / (3.0 * len(sel) * KB)
+        # не остужать ниже 5 К и не греть выше 30 000 К
+        if (factor > 1.0 and t_local > 30000.0) or (factor < 1.0 and t_local < 5.0):
+            return
+        sim.vel[sel] = sim.vel[sel] * math.sqrt(factor) ** 0.5
         e1 = kinetic_energy(sim.vel[sel], sim.invm[sel])
         sim.heat_in += e1 - e0
         self.view.add_spark(x, y, self.brush, (255, 120, 40) if factor > 1 else (80, 160, 255))
