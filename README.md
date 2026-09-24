@@ -22,7 +22,7 @@
 ## Быстрый старт
 
 ```bash
-pip install -r requirements.txt     # numpy, numba, pygame
+pip install -r requirements.txt     # numpy, numba, pygame-ce
 python main.py                      # игра
 ```
 
@@ -30,9 +30,11 @@ python main.py                      # игра
 запустит игру. Или в командной строке, в папке с игрой:
 `python -m pip install -r requirements.txt`, затем `python main.py`.
 
-Нужен Python 3.9+ (с версией, которую поддерживает numba; надёжнее всего 3.10–3.12).
-Если pip не может установить numba или pygame, значит версия Python слишком новая
-для них: поставьте Python 3.12 с python.org (вместо pygame подойдёт `pygame-ce`). Первый запуск занимает
+Нужен Python 3.9+ (проверено до 3.14). Графика — `pygame-ce`: это поддерживаемая
+версия pygame с тем же `import pygame` и готовыми сборками под новые Python (у
+классического `pygame` 2.6 сборок для Python 3.14 нет, и pip пытается его
+компилировать). Если у вас уже стоит классический pygame, сначала удалите его:
+`python -m pip uninstall pygame`. Первый запуск занимает
 ~30 секунд: numba компилирует физическое ядро в машинный код. Потом результат
 берётся из кэша, и запуск мгновенный.
 

@@ -3,7 +3,7 @@
 import importlib.util
 import sys
 
-REQUIRED = {"numpy": "numpy", "numba": "numba", "pygame": "pygame"}
+REQUIRED = {"numpy": "numpy", "numba": "numba", "pygame": "pygame-ce"}
 
 
 def _check_dependencies():
@@ -16,9 +16,8 @@ def _check_dependencies():
     print(f'    "{sys.executable}" -m pip install -r requirements.txt')
     print()
     print(f"Ваша версия Python: {sys.version.split()[0]}.")
-    print("Если pip не может установить numba или pygame, скорее всего версия Python")
-    print("слишком новая для этих пакетов: поставьте Python 3.12 с python.org")
-    print("(вместо pygame можно установить совместимый пакет pygame-ce).")
+    print("Если pip не может установить какой-то пакет, скорее всего для вашей версии")
+    print("Python ещё нет готовой сборки: поставьте Python 3.12 с python.org.")
     return False
 
 
