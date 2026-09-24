@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .molecules import place
-from .simulation import Simulation, WALLS, ISOLATED, BATH
+from .simulation import Simulation, WALLS, ISOLATED
 
 
 @dataclass

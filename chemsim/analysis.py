@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -161,7 +161,6 @@ class ChemistryMonitor:
         return mols
 
     def _detect_reactions(self, t, old_of, old_labels, new_of, new_labels, old_mols, new_mols):
-        n_old = len(old_mols)
         # молекулы, чей набор атомов не изменился, пропускаем
         changed_old = set()
         changed_new = set()

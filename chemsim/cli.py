@@ -64,7 +64,7 @@ def cmd_run(args):
     mon.update(sim)
     for _ in range(args.sparks):
         k = int(sim.rng.integers(sim.n))
-        hit = sim.spark(sim.pos[k, :2], 4.0, 25000.0)
+        sim.spark(sim.pos[k, :2], 4.0, 25000.0)
         sim.step(200)
     print(f"атомов: {sim.n}, режим: {sim.mode}, ящик: {sim.box[0]:.0f}×{sim.box[1]:.0f}×"
           f"{sim.box[2]:.0f} Å, T = {sim.temperature:.0f} К\n")

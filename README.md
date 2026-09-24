@@ -26,8 +26,9 @@ pip install -r requirements.txt     # numpy, numba, pygame
 python main.py                      # игра
 ```
 
-Первый запуск занимает ~30 секунд: numba компилирует физическое ядро в машинный
-код. Потом результат берётся из кэша, и запуск мгновенный.
+Нужен Python 3.9+ (с версией, которую поддерживает numba). Первый запуск занимает
+~30 секунд: numba компилирует физическое ядро в машинный код. Потом результат
+берётся из кэша, и запуск мгновенный.
 
 Без графики:
 
@@ -37,7 +38,7 @@ python -m chemsim run --mix "CH4:12,O2:24" --temp 3500 --mode isolated --time 5
 python -m chemsim validate --md report.md    # сравнение модели с экспериментом
 python -m chemsim scenarios                  # список готовых опытов
 python -m chemsim elements --pair C-O        # параметры связи C–O и откуда они взялись
-python -m pytest                             # тесты (55 шт., ~20 с)
+python -m pytest                             # 55 тестов (~20 с; первый прогон дольше — компиляция)
 ```
 
 ## Управление

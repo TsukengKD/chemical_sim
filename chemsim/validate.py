@@ -247,7 +247,7 @@ def report(params=None) -> str:
     def table(title, rows, unit, fmt="{:.1f}"):
         lines.append(f"## {title}")
         lines.append("")
-        lines.append(f"| | модель | эксперимент | ошибка |")
+        lines.append("| | модель | эксперимент | ошибка |")
         lines.append("|---|---:|---:|---:|")
         for r in rows:
             rel = f" ({r.rel:+.0f}%)" if r.exp else ""

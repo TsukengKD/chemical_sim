@@ -5,6 +5,8 @@
 Для формул с несколькими изомерами указано самое распространённое вещество.
 """
 
+from __future__ import annotations
+
 import re
 
 _NAMES_CONV = {

@@ -50,7 +50,7 @@ import numpy as np
 from .jit import njit
 from .params import (P_BOND, P_D1, P_R1, P_A1, P_RON, P_ROFF, P_PIMAX, P_CP, P_AP, P_R2,
                      P_CQ, P_AQ, P_R3, P_EPS, P_X6, P_GR6, P_GD6, P_RONL, P_ROFFL, P_QT,
-                     P_DI, E_VAL, E_EVAL, E_DELTA, E_KANG, E_GACUTE, E_METAL,
+                     P_DI, E_VAL, E_EVAL, E_KANG, E_GACUTE, E_METAL,
                      S_RSW, S_RCUT, S_CREP, S_CDISP, S_KMIN, S_KOVER, S_KSPARE, S_KPI,
                      S_KLP, S_EPSW, S_KE, S_AS3)
 
@@ -262,8 +262,6 @@ def compute_forces(pos, typ, pi, pj, npair, elempar, pairpar, scal,
     gtfi = np.zeros(P)
     gtfj = np.zeros(P)
     gtau = np.zeros(P)
-    pui = np.zeros(P)
-    puj = np.zeros(P)
     nn = np.zeros(P)
     dnri = np.zeros(P)
     dnrj = np.zeros(P)

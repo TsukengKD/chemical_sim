@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
 
-from .elements import ELEMENTS, SYMBOLS
+from .elements import SYMBOLS
 from .kernel import compute_forces, N_EBREAK, N_ATOMOUT, A_Q, A_SPARE
 from .md import (build_nlist, run_md, wall_forces, kinetic_energy, seed_rng,
-                 N_STATS, ST_EPOT, ST_EWALL, ST_WALLF, ST_HEAT, ST_STEPS, ST_ESCAPES,
+                 N_STATS, ST_EPOT, ST_EWALL, ST_WALLF, ST_HEAT, ST_ESCAPES,
                  ST_TIME, ST_RETRIES)
 from .params import default_params, ForceFieldParams, E_MASS
 from .units import KB, FORCE_TO_ACC, KJMOL_A3_TO_ATM
